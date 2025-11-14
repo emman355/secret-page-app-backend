@@ -8,28 +8,14 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
+// 2. Users Table (Public data for Pages 1 & 2 & 3)
 export const users = pgTable('users', {
   id: uuid('id').default(sql`gen_random_uuid()`).primaryKey(),
   email: text('email').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// 1. Profiles Table (For public metadata like username/avatar)
-export const profiles = pgTable('profiles', {
-  // Primary Key and Foreign Key linking directly to the auth.users ID
-  id: uuid('id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' })
-    .primaryKey(),
-  
-  username: varchar('username', { length: 256 }).unique().notNull(),
-  avatar_url: text('avatar_url'),
-
-  updated_at: timestamp('updated_at', { withTimezone: true }),
-  created_at: timestamp('created_at', { withTimezone: true }).default(sql`current_timestamp`).notNull(),
-});
-
-// 2. Secret Messages Table (Private data for Pages 2 & 3)
+// 2. Secret Messages Table (Public data for Pages 2 & 3)
 export const secretMessages =  pgTable('secret_messages', {
   id: uuid('id').default(sql`gen_random_uuid()`).primaryKey(),
   user_id: uuid('user_id')
@@ -54,7 +40,6 @@ export const friendRequests =  pgTable('friend_requests', {
   // Status can be 'pending' or 'accepted'
   status: varchar('status', { length: 16 }).notNull().default('pending'),
 
-  // FIX: Changed sql`now()` to sql`current_timestamp` to resolve linter error
   created_at: timestamp('created_at', { withTimezone: true }).default(sql`current_timestamp`).notNull(),
 }, (table) => {
   return {
