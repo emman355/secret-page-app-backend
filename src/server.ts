@@ -138,8 +138,6 @@ app.delete('/api/protected/users/:userId', async (req: AuthRequest, res) => {
   }
 });
 
-// 2. SECRET MESSAGE ENDPOINTS (Pages 2 & 3 logic)
-
 // Save/Overwrite the authenticated user's secret message
 app.post('/api/protected/secret', async (req: AuthRequest, res) => {
   const { content } = req.body;
@@ -271,48 +269,6 @@ app.put('/api/protected/secret/:id', async (req: AuthRequest, res) => {
   }
 });
 
-// 1. PROFILE ENDPOINTS (Used for initial setup and user discovery)
-
-// Create or update a user's profile
-app.post('/api/protected/profile', async (req: AuthRequest, res) => {
-  const { username, avatar_url } = req.body;
-  const userId = req.userId!;
-
-  try {
-    const [profile] = await db.insert(schema.profiles)
-      .values({
-        id: userId,
-        username,
-        avatar_url,
-        updated_at: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: schema.profiles.id,
-        set: { username, avatar_url, updated_at: new Date() },
-      })
-      .returning();
-
-    res.json(profile);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to set or update profile.' });
-  }
-});
-
-// Get a list of all existing profiles (for friend discovery on Page 3)
-app.get('/api/protected/profiles/all', async (req, res) => {
-  try {
-    // RLS Policy "Enable read access for all authenticated users" applies here,
-    // ensuring only authenticated requests (with a valid x-user-id) get results.
-    const allProfiles = await db.query.profiles.findMany({
-      columns: { id: true, username: true, avatar_url: true },
-    });
-    res.json(allProfiles);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch profiles.' });
-  }
-});
-
-// POST /api/protected/friends
 app.post('/api/protected/add-friend', async (req: AuthRequest, res) => {
   const { receiver_id } = req.body;
   const sender_id = req.userId!;
@@ -322,7 +278,6 @@ app.post('/api/protected/add-friend', async (req: AuthRequest, res) => {
   }
 
   try {
-    // Check for existing friend request
     const existing = await db.query.friendRequests.findFirst({
     where: (fr, { eq, and }) =>
     and(eq(fr.sender_id, sender_id), eq(fr.receiver_id, receiver_id)),
@@ -332,7 +287,6 @@ app.post('/api/protected/add-friend', async (req: AuthRequest, res) => {
       return res.status(409).json({ error: 'Friend request already sent.' });
     }
 
-    // Insert new friend request
     const [request] = await db.insert(schema.friendRequests)
       .values({
         sender_id,
