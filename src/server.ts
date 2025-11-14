@@ -395,25 +395,28 @@ app.delete('/api/protected/friends/:requestId', authMiddleware, async (req: Auth
   }
 });
 
+//fetch friends secret messages
 app.get('/api/protected/friends/messages/:friendId', authMiddleware, async (req: AuthRequest, res) => {
   const userId = req.userId!;
-  const friendId = req.params.friendId; // the friend whose secrets you want
+  const friendId = req.params.friendId;
   const { friendRequests, users, secretMessages } = schema;
 
   try {
-    // Check if friendship exists and is accepted
+    // Check if friendship exists between userId and friendId
     const friendship = await db
       .select()
       .from(friendRequests)
       .where(
         and(
-          eq(friendRequests.sender_id, friendId),
+          or(
+            and(eq(friendRequests.sender_id, userId), eq(friendRequests.receiver_id, friendId)),
+            and(eq(friendRequests.sender_id, friendId), eq(friendRequests.receiver_id, userId))
+          ),
           eq(friendRequests.status, 'accepted')
         )
-      )
+      );
 
     if (friendship.length === 0) {
-      // Not friends → return 401
       return res.status(401).json({
         success: false,
         statusCode: 401,
@@ -422,30 +425,17 @@ app.get('/api/protected/friends/messages/:friendId', authMiddleware, async (req:
       });
     }
 
-    // If friends → fetch their secret messages
-     const friendsSecrets = await db
+    // Fetch secret messages of friendId
+    const friendsSecrets = await db
       .select({
-        sender_id: friendRequests.sender_id,
-        receiver_id: friendRequests.receiver_id,
-        friend_email: users.email,
-        friend_secret: secretMessages.content,
         secret_message_id: secretMessages.id,
-        created_at: friendRequests.created_at,
+        friend_secret: secretMessages.content,
+        created_at: secretMessages.updated_at,
+        friend_email: users.email,
       })
-      .from(friendRequests)
-      // Join users table for both sender and receiver
-      .innerJoin(users, or(
-        eq(friendRequests.sender_id, users.id),
-        eq(friendRequests.receiver_id, users.id)
-      ))
-      // Join secret messages for that user
-      .innerJoin(secretMessages, eq(secretMessages.user_id, users.id))
-      .where(
-        and(
-            eq(friendRequests.receiver_id, userId),
-          eq(friendRequests.status, 'accepted')
-        )
-      );
+      .from(secretMessages)
+      .innerJoin(users, eq(secretMessages.user_id, users.id))
+      .where(eq(secretMessages.user_id, friendId));
 
     return res.status(200).json({
       success: true,
@@ -463,6 +453,7 @@ app.get('/api/protected/friends/messages/:friendId', authMiddleware, async (req:
     });
   }
 });
+
 
 // --- SERVER STARTUP ---
 app.get('/', (_, res) => res.send('Hello from Vercel!'));
