@@ -395,14 +395,28 @@ app.delete('/api/protected/friends/:requestId', authMiddleware, async (req: Auth
   }
 });
 
-//fetch friends secret messages
 app.get('/api/protected/friends/messages/:friendId', authMiddleware, async (req: AuthRequest, res) => {
   const userId = req.userId!;
   const friendId = req.params.friendId;
   const { friendRequests, users, secretMessages } = schema;
 
   try {
-    // Check if friendship exists between userId and friendId
+    // Step 1: Check if friendId has a secret message
+    const secretExists = await db
+      .select()
+      .from(secretMessages)
+      .where(eq(secretMessages.user_id, friendId));
+
+    if (secretExists.length === 0) {
+      return res.status(404).json({
+        success: false,
+        statusCode: 404,
+        status: 'not_found',
+        message: 'This user has no secret messages.',
+      });
+    }
+
+    // Step 2: Check if friendship exists between userId and friendId
     const friendship = await db
       .select()
       .from(friendRequests)
@@ -420,15 +434,16 @@ app.get('/api/protected/friends/messages/:friendId', authMiddleware, async (req:
       return res.status(401).json({
         success: false,
         statusCode: 401,
-        status: 'Unauthorized',
+        status: 'unauthorized',
         message: 'You are not friends with this user.',
       });
     }
 
-    // Fetch secret messages of friendId
+    // Step 3: Fetch secret messages of friendId
     const friendsSecrets = await db
       .select({
         secret_message_id: secretMessages.id,
+        secret_message_user_id: secretMessages.user_id,
         friend_secret: secretMessages.content,
         created_at: secretMessages.updated_at,
         friend_email: users.email,
@@ -439,20 +454,23 @@ app.get('/api/protected/friends/messages/:friendId', authMiddleware, async (req:
 
     return res.status(200).json({
       success: true,
+      statusCode: 200,
       status: 'retrieved',
       message: 'Friend secret messages retrieved successfully.',
       friendsSecrets,
     });
   } catch (error) {
-    console.error('Error fetching friend secrets:', error);
     return res.status(500).json({
       success: false,
+      statusCode: 500,
       status: 'server_error',
       message: 'Failed to fetch friend secrets.',
       error: error instanceof Error ? error.message : String(error),
     });
   }
 });
+
+
 
 
 // --- SERVER STARTUP ---
